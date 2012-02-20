@@ -37,7 +37,7 @@ final class BranchInfo {
    *
    * @return array a list of BranchInfo objects, one per branch.
    */
-  public static function loadAll(ArcanistGitAPI $api) {
+  public static function loadAll(ArcanistGitAPI $api, ConduitClient $conduit) {
     $branches_raw = $api->getAllBranches();
     $branches = array();
     foreach ($branches_raw as $branch_raw) {
@@ -57,6 +57,9 @@ final class BranchInfo {
       $sha1 = $name_sha1_map[$branch->getName()];
       $branch->setSha1($sha1);
       $branch->parseCommitMessage($commits_list[$sha1]);
+      if (!$branch->getRevisionID()) {
+        $branch->findDifferentialRevision($api, $conduit);
+      }
     }
     $branches = msort($branches, 'getCommitTime');
     return $branches;
@@ -135,6 +138,46 @@ final class BranchInfo {
     $this->revisionID =
       ArcanistDifferentialCommitMessage::newFromRawCorpus($message)
       ->getRevisionID();
+  }
+
+  protected function findDifferentialRevision(
+    ArcanistGitAPI $api,
+    ConduitClient $conduit) {
+
+    $query = array(
+      'status' => 'status-open',
+    );
+
+    $api->parseRelativeLocalCommit(array('master'));
+
+    $hashes = array();
+    foreach ($api->getLocalCommitInformation($this->getName()) as $commit) {
+      $hashes[] = array('gtcm', $commit['commit']);
+      $hashes[] = array('gttr', $commit['tree']);
+    }
+
+    $results = $conduit->callMethodSynchronous(
+      'differential.query',
+      $query + array(
+        'commitHashes' => $hashes,
+      ));
+
+    if ($results) {
+      if (count($results) == 1) {
+        $this->revisionID = idx(head($results), 'id');
+      }
+      return;
+    }
+
+    $results = $conduit->callMethodSynchronous(
+      'differential.query',
+      $query + array(
+        'branches' => array($this->getName()),
+      ));
+
+    if ($results && count($results) == 1) {
+      $this->revisionID = idx(head($results), 'id');
+    }
   }
 
   public function getFormattedName() {

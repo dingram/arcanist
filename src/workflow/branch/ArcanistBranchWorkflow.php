@@ -71,7 +71,7 @@ EOTEXT
       );
     }
 
-    $this->branches = BranchInfo::loadAll($repository_api);
+    $this->branches = BranchInfo::loadAll($repository_api, $this->getConduit());
     $all_revisions = array_unique(
       array_filter(mpull($this->branches, 'getRevisionId')));
     $revision_status = $this->loadDifferentialStatuses($all_revisions);

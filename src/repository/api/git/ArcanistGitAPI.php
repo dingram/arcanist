@@ -51,7 +51,7 @@ final class ArcanistGitAPI extends ArcanistRepositoryAPI {
     return $this;
   }
 
-  public function getLocalCommitInformation() {
+  public function getLocalCommitInformation($until = null) {
     if ($this->repositoryHasNoCommits) {
       // Zero commits.
       throw new Exception(
@@ -61,8 +61,12 @@ final class ArcanistGitAPI extends ArcanistRepositoryAPI {
       // One commit.
       $against = 'HEAD';
     } else {
+      if ($until === null) {
+        $until = 'HEAD';
+      }
+
       // 2..N commits.
-      $against = $this->getRelativeCommit().'..HEAD';
+      $against = $this->getRelativeCommit().'..'.$until;
     }
 
     list($info) = execx(
@@ -74,6 +78,9 @@ final class ArcanistGitAPI extends ArcanistRepositoryAPI {
     $commits = array();
 
     $info = trim($info);
+    if ($info === '') {
+      return array();
+    }
     $info = explode("\n", $info);
     foreach ($info as $line) {
       list($commit, $tree, $parents, $time, $author, $title)
